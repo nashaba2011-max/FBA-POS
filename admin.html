@@ -414,7 +414,7 @@ tfoot td{ font-weight:800; background:var(--paper-dim); border-top:2px solid var
 
 <div id="lockScreen" class="modal-overlay" style="display:none; background:var(--paper);">
   <div class="modal-card">
-    <h4>Aali branch is password protected</h4>
+    <h4>Admin branch is password protected</h4>
     <input type="password" id="lockInput" placeholder="Enter password">
     <div id="lockError" class="pw-error" style="display:none">Incorrect password</div>
     <div class="modal-actions">
@@ -427,10 +427,12 @@ tfoot td{ font-weight:800; background:var(--paper-dim); border-top:2px solid var
 <header>
   <div class="brand">
     <span class="wordmark">Fareeq Bin Aqool</span>
-    <span class="sub">POS System</span>
+    <span class="sub">Admin Dashboard</span>
   </div>
   <div class="header-controls">
-    <span class="branch-select" id="branchLabel" style="cursor:default;">Aali</span>
+    <select id="branchNav" class="branch-select">
+      <option value="">Open Branch Page ▾</option>
+    </select>
     <div class="tabs">
       <button class="tab-btn active" data-tab="pos">Point of Sale</button>
       <button class="tab-btn" data-tab="orders">Orders</button>
@@ -480,7 +482,7 @@ tfoot td{ font-weight:800; background:var(--paper-dim); border-top:2px solid var
         <div class="s-card"><div class="label">Today's Orders</div><div class="value" id="ordSumCount">0</div></div>
       </div>
       <div class="report-section">
-        <h4>Order History — Aali</h4>
+        <h4>Order History — Admin</h4>
         <table>
           <thead id="branchOrdersHead"><tr><th>Time</th><th>Type</th><th>Payment</th><th>Item</th><th>Size</th><th>Qty</th><th>Total</th></tr></thead>
           <tbody id="branchOrdersTable"></tbody>
@@ -619,8 +621,23 @@ const SUPABASE_URL = "https://lzadmbjhcxqvafykntsp.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6YWRtYmpoY3hxdmFmeWtudHNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0NjQwOTYsImV4cCI6MjEwNTA0MDA5Nn0.HNGwF8_lHrUHU_Xhx9Ymn0eoLHGaJ2GVd69umNNkXCI";
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const BRANCH_NAME = "Aali"; // this page is dedicated to this one branch
+const BRANCH_NAME = "Admin"; // this page is dedicated to this one branch
 const BRANCHES = ["Aali","Hamad Town","Jeblat Hebshi","Malikya","Muharraq","Saar","Sanad","Sitra","Zinj"];
+const BRANCH_SLUGS = {
+  "Aali":"aali", "Hamad Town":"hamad-town", "Jeblat Hebshi":"jeblat-hebshi",
+  "Malikya":"malikya", "Muharraq":"muharraq", "Saar":"saar",
+  "Sanad":"sanad", "Sitra":"sitra", "Zinj":"zinj"
+};
+const branchNav = document.getElementById('branchNav');
+BRANCHES.forEach(b=>{
+  const o = document.createElement('option');
+  o.value = 'pos-' + BRANCH_SLUGS[b] + '.html';
+  o.textContent = b;
+  branchNav.appendChild(o);
+});
+branchNav.addEventListener('change', ()=>{
+  if(branchNav.value) window.location.href = branchNav.value;
+});
 
 let BRANCH_ID = null;
 let PRODUCTS = [];
@@ -660,7 +677,6 @@ function daypartFor(date){
 }
 
 // ---------- init selectors ----------
-document.getElementById('branchLabel').textContent = BRANCH_NAME;
 const filterBranch = document.getElementById('filterBranch');
 BRANCHES.forEach(b=>{
   const o2 = document.createElement('option'); o2.value=b; o2.textContent=b;
