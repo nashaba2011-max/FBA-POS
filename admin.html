@@ -1466,6 +1466,28 @@ document.getElementById('exportExcelBtn').addEventListener('click', ()=>{
     .map(([size, s])=>({ 'Size': size, 'Quantity Sold': s.qty, 'Total (BHD)': Number(s.total.toFixed(3)) }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sizeRows), 'Sales by Size');
 
+  const detailStats = {};
+  orders.forEach(o=>{
+    (o.items||[]).forEach(it=>{
+      const key = o.branch + '::' + it.name + '::' + it.size;
+      if(!detailStats[key]) detailStats[key] = {branch:o.branch, item:it.name, size:it.size, qty:0, total:0};
+      detailStats[key].qty += it.qty;
+      detailStats[key].total += it.qty * currentItemPrice(it);
+    });
+  });
+  const detailRows = Object.values(detailStats)
+    .sort((a,b)=> a.branch===b.branch
+      ? (a.item===b.item ? sizeOrderIndex(a.size)-sizeOrderIndex(b.size) : a.item.localeCompare(b.item))
+      : a.branch.localeCompare(b.branch))
+    .map(d=>({
+      'Branch': d.branch,
+      'Item': d.item,
+      'Size': d.size,
+      'Quantity Sold': d.qty,
+      'Total (BHD)': Number(d.total.toFixed(3))
+    }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detailRows), 'Item & Size Detail');
+
   const branchStats = {};
   orders.forEach(o=>{
     if(!branchStats[o.branch]) branchStats[o.branch] = {count:0, total:0};
