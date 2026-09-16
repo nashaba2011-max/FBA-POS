@@ -580,7 +580,7 @@ tfoot td{ font-weight:800; background:var(--paper-dim); border-top:2px solid var
       <div class="report-section">
         <h4>Order History — Sitra</h4>
         <table>
-          <thead id="branchOrdersHead"><tr><th>Time</th><th>Type</th><th>Payment</th><th>Item</th><th>Size</th><th>Qty</th><th>Total</th></tr></thead>
+          <thead id="branchOrdersHead"><tr><th>Time</th><th>Type</th><th>Payment</th><th>Item</th><th>Size</th><th>Qty</th><th>Total</th><th>Cost</th><th>Profit</th></tr></thead>
           <tbody id="branchOrdersTable"></tbody>
           <tfoot id="branchOrdersFoot"></tfoot>
         </table>
@@ -1111,14 +1111,14 @@ async function fetchAllOrders(){
 }
 
 async function renderBranchOrders(){
-  document.getElementById('branchOrdersTable').innerHTML = '<tr><td colspan="7" class="empty-state">Loading...</td></tr>';
+  document.getElementById('branchOrdersTable').innerHTML = '<tr><td colspan="9" class="empty-state">Loading...</td></tr>';
   let orders = await fetchAllOrders();
   orders = orders.filter(o=>o.branch===BRANCH_NAME);
   orders.sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp));
 
   // always show current prices, even for older orders
   orders.forEach(o=>{
-    (o.items||[]).forEach(it=>{ it.price = currentItemPrice(it); });
+    (o.items||[]).forEach(it=>{ it.price = currentItemPrice(it); it.cost = currentItemCost(it); });
     o.total = (o.items||[]).reduce((s,it)=> s + it.price*it.qty, 0);
   });
 
@@ -1131,7 +1131,7 @@ async function renderBranchOrders(){
   const tbody = document.getElementById('branchOrdersTable');
   const tfoot = document.getElementById('branchOrdersFoot');
   if(orders.length===0){
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">No orders yet for this branch</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">No orders yet for this branch</td></tr>';
     tfoot.innerHTML = '';
   } else {
     const shown = orders.slice(0,50);
@@ -1142,26 +1142,28 @@ async function renderBranchOrders(){
       const time = d.toLocaleString('en-US', {dateStyle:'short', timeStyle:'short', hour12:true});
       const typeLabel = o.orderType==='delivery' ? 'Delivery' : 'Dine-in/Takeaway';
       (o.items||[]).forEach(it=>{
-        rows.push({time, typeLabel, payment:o.payment, name:it.name, size:it.size, qty:it.qty, lineTotal:it.price*it.qty});
+        rows.push({time, typeLabel, payment:o.payment, name:it.name, size:it.size, qty:it.qty, lineTotal:it.price*it.qty, lineCost:it.cost*it.qty});
       });
     });
     tbody.innerHTML = rows.map(r=>
-      `<tr><td>${r.time}</td><td>${r.typeLabel}</td><td>${r.payment}</td><td>${r.name}</td><td>${r.size}</td><td>${r.qty}</td><td>${r.lineTotal.toFixed(3)} BHD</td></tr>`
+      `<tr><td>${r.time}</td><td>${r.typeLabel}</td><td>${r.payment}</td><td>${r.name}</td><td>${r.size}</td><td>${r.qty}</td><td>${r.lineTotal.toFixed(3)} BHD</td><td>${r.lineCost.toFixed(3)} BHD</td><td>${(r.lineTotal-r.lineCost).toFixed(3)} BHD</td></tr>`
     ).join('');
 
     const grandTotal = rows.reduce((s,r)=>s+r.lineTotal,0);
+    const grandCost = rows.reduce((s,r)=>s+r.lineCost,0);
     const byItemSize = {};
     rows.forEach(r=>{
       const key = r.name + '::' + r.size;
-      if(!byItemSize[key]) byItemSize[key] = {name:r.name, size:r.size, qty:0, total:0};
+      if(!byItemSize[key]) byItemSize[key] = {name:r.name, size:r.size, qty:0, total:0, cost:0};
       byItemSize[key].qty += r.qty;
       byItemSize[key].total += r.lineTotal;
+      byItemSize[key].cost += r.lineCost;
     });
     const summaryRows = Object.values(byItemSize)
       .sort((a,b)=> a.name===b.name ? sizeOrderIndex(a.size)-sizeOrderIndex(b.size) : a.name.localeCompare(b.name))
-      .map(s=> `<tr><td colspan="3"></td><td>${s.name}</td><td>${s.size}</td><td>${s.qty}</td><td>${s.total.toFixed(3)} BHD</td></tr>`)
+      .map(s=> `<tr><td colspan="3"></td><td>${s.name}</td><td>${s.size}</td><td>${s.qty}</td><td>${s.total.toFixed(3)} BHD</td><td>${s.cost.toFixed(3)} BHD</td><td>${(s.total-s.cost).toFixed(3)} BHD</td></tr>`)
       .join('');
-    tfoot.innerHTML = summaryRows + `<tr><td colspan="6">Grand Total</td><td>${grandTotal.toFixed(3)} BHD</td></tr>`;
+    tfoot.innerHTML = summaryRows + `<tr><td colspan="6">Grand Total</td><td>${grandTotal.toFixed(3)} BHD</td><td>${grandCost.toFixed(3)} BHD</td><td>${(grandTotal-grandCost).toFixed(3)} BHD</td></tr>`;
   }
 }
 
@@ -1283,12 +1285,12 @@ function renderOneBranchReport(branch, orders){
 
   // recent orders for this branch
   const ordersHtml = orders.length===0
-    ? '<tr><td colspan="4" class="empty-state">No orders yet</td></tr>'
+    ? '<tr><td colspan="6" class="empty-state">No orders yet</td></tr>'
     : orders.slice(0,10).map(o=>{
         const d = new Date(o.timestamp);
         const time = d.toLocaleString('en-US', {dateStyle:'short', timeStyle:'short', hour12:true});
         const typeLabel = o.orderType==='delivery' ? 'Delivery' : 'Dine-in/Takeaway';
-        return `<tr><td>${time}</td><td>${typeLabel}</td><td>${o.payment}</td><td>${o.total.toFixed(3)} BHD</td></tr>`;
+        return `<tr><td>${time}</td><td>${typeLabel}</td><td>${o.payment}</td><td>${o.total.toFixed(3)} BHD</td><td>${o.cost.toFixed(3)} BHD</td><td>${(o.total-o.cost).toFixed(3)} BHD</td></tr>`;
       }).join('');
 
   return `
@@ -1318,7 +1320,7 @@ function renderOneBranchReport(branch, orders){
 
       <h5 style="margin-top:14px;">Recent Orders</h5>
       <table>
-        <thead><tr><th>Time</th><th>Type</th><th>Payment</th><th>Total</th></tr></thead>
+        <thead><tr><th>Time</th><th>Type</th><th>Payment</th><th>Total</th><th>Cost</th><th>Profit</th></tr></thead>
         <tbody>${ordersHtml}</tbody>
       </table>
     </div>
