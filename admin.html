@@ -388,11 +388,11 @@ select, button, input{
 .ms-value{ font-size:17px; font-weight:800; color:var(--ink); }
 .branch-report-sub{
   display:grid;
-  grid-template-columns:1fr 1.4fr;
+  grid-template-columns:1fr 2fr;
   gap:24px;
   margin-bottom:16px;
 }
-@media (max-width:720px){ .branch-report-sub{ grid-template-columns:1fr; } }
+@media (max-width:900px){ .branch-report-sub{ grid-template-columns:1fr; } }
 .mini-row{
   display:flex;
   justify-content:space-between;
@@ -648,7 +648,7 @@ tfoot td{ font-weight:800; background:var(--paper-dim); border-top:2px solid var
       <div class="report-section">
         <h4>Sales by Size (All Branches)</h4>
         <table>
-          <thead><tr><th>Size</th><th>Quantity Sold</th><th>Total</th></tr></thead>
+          <thead><tr><th>Size</th><th>Quantity Sold</th><th>Total</th><th>Cost</th><th>Profit</th></tr></thead>
           <tbody id="globalSizeTable"></tbody>
         </table>
       </div>
@@ -1246,19 +1246,20 @@ function renderGlobalSizeTable(orders){
   orders.forEach(o=>{
     (o.items||[]).forEach(it=>{
       const label = it.size || 'Unspecified';
-      if(!stats[label]) stats[label] = {qty:0, total:0};
+      if(!stats[label]) stats[label] = {qty:0, total:0, cost:0};
       stats[label].qty += it.qty;
       stats[label].total += it.qty * currentItemPrice(it);
+      stats[label].cost += it.qty * currentItemCost(it);
     });
   });
   const tbody = document.getElementById('globalSizeTable');
   const entries = Object.entries(stats).sort((a,b)=> sizeOrderIndex(a[0]) - sizeOrderIndex(b[0]));
   if(entries.length===0){
-    tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No data yet</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No data yet</td></tr>';
     return;
   }
   tbody.innerHTML = entries.map(([label, s])=>
-    `<tr><td>${label}</td><td>${s.qty}</td><td>${s.total.toFixed(3)} BHD</td></tr>`
+    `<tr><td>${label}</td><td>${s.qty}</td><td>${s.total.toFixed(3)} BHD</td><td>${s.cost.toFixed(3)} BHD</td><td>${(s.total-s.cost).toFixed(3)} BHD</td></tr>`
   ).join('');
 }
 
@@ -1280,17 +1281,18 @@ function renderOneBranchReport(branch, orders){
       const size = it.size || 'Unspecified';
       const name = it.name || 'Unknown';
       const key = name + '::' + size;
-      if(!sizeStats[key]) sizeStats[key] = {name, size, qty:0, total:0};
+      if(!sizeStats[key]) sizeStats[key] = {name, size, qty:0, total:0, cost:0};
       sizeStats[key].qty += it.qty;
       sizeStats[key].total += it.qty * currentItemPrice(it);
+      sizeStats[key].cost += it.qty * currentItemCost(it);
     });
   });
   const sizeRows = Object.values(sizeStats).sort((a,b)=>
     a.name===b.name ? sizeOrderIndex(a.size)-sizeOrderIndex(b.size) : a.name.localeCompare(b.name)
   );
   const sizeHtml = sizeRows.length===0
-    ? '<tr><td colspan="4" class="empty-state">No data yet</td></tr>'
-    : sizeRows.map(s=>`<tr><td>${s.name}</td><td>${s.size}</td><td>${s.qty}</td><td>${s.total.toFixed(3)} BHD</td></tr>`).join('');
+    ? '<tr><td colspan="6" class="empty-state">No data yet</td></tr>'
+    : sizeRows.map(s=>`<tr><td>${s.name}</td><td>${s.size}</td><td>${s.qty}</td><td>${s.total.toFixed(3)} BHD</td><td>${s.cost.toFixed(3)} BHD</td><td>${(s.total-s.cost).toFixed(3)} BHD</td></tr>`).join('');
 
   const ordersHtml = orders.length===0
     ? '<tr><td colspan="4" class="empty-state">No orders yet</td></tr>'
@@ -1320,7 +1322,7 @@ function renderOneBranchReport(branch, orders){
         <div>
           <h5>Sales by Size</h5>
           <table>
-            <thead><tr><th>Item</th><th>Size</th><th>Qty</th><th>Total</th></tr></thead>
+            <thead><tr><th>Item</th><th>Size</th><th>Qty</th><th>Total</th><th>Cost</th><th>Profit</th></tr></thead>
             <tbody>${sizeHtml}</tbody>
           </table>
         </div>
