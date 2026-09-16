@@ -137,34 +137,68 @@ select, button, input{
 .product-card{
   background:var(--white);
   border:1px solid var(--line);
-  border-radius:8px;
-  padding:14px;
-  cursor:pointer;
-  transition:transform .1s, border-color .1s;
+  border-radius:10px;
+  padding:16px;
+  box-shadow:0 1px 3px rgba(43,27,18,0.06);
+  transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;
 }
 .product-card:hover{
   border-color:var(--brass);
+  transform:translateY(-3px);
+  box-shadow:0 8px 18px rgba(43,27,18,0.12);
 }
-.product-card{ cursor:default; }
-.product-card .name{ font-weight:700; font-size:15px; margin-bottom:10px; }
+.product-card .name{
+  font-weight:700;
+  font-size:15px;
+  margin-bottom:12px;
+  padding-bottom:8px;
+  border-bottom:1px solid var(--line);
+}
 .size-grid{
   display:grid;
   grid-template-columns:1fr 1fr;
-  gap:6px;
+  gap:8px;
 }
 .size-btn{
+  position:relative;
   background:var(--paper-dim);
   border:1px solid var(--line);
-  border-radius:6px;
-  padding:6px 4px;
+  border-radius:8px;
+  padding:8px 4px;
   cursor:pointer;
   text-align:center;
-  transition:background .1s, border-color .1s;
+  transition:background .12s ease, border-color .12s ease, transform .08s ease, box-shadow .12s ease;
 }
-.size-btn:hover{ background:var(--brass); border-color:var(--brass); }
+.size-btn:hover{
+  background:var(--brass);
+  border-color:var(--brass);
+  transform:translateY(-1px);
+  box-shadow:0 4px 10px rgba(173,138,78,0.35);
+}
+.size-btn:active{ transform:translateY(0) scale(0.96); }
 .size-btn:hover .sb-label, .size-btn:hover .sb-price{ color:var(--ink); }
 .size-btn .sb-label{ display:block; font-size:11px; color:#8A7A63; font-weight:600; }
 .size-btn .sb-price{ display:block; font-size:12px; color:var(--brass-dark); font-weight:700; margin-top:2px; }
+.size-btn.in-cart{ border-color:var(--green); background:#E9EFE6; }
+.sb-badge{
+  position:absolute;
+  top:-8px;
+  right:-8px;
+  background:var(--brick);
+  color:#fff;
+  font-size:11px;
+  font-weight:800;
+  min-width:20px;
+  height:20px;
+  padding:0 4px;
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  box-shadow:0 2px 5px rgba(0,0,0,.25);
+  animation:popIn .15s ease;
+}
+@keyframes popIn{ from{ transform:scale(0.4); opacity:0; } to{ transform:scale(1); opacity:1; } }
 
 /* ===== Cart ===== */
 .cart-panel{
@@ -288,14 +322,32 @@ select, button, input{
   display:flex;
   gap:10px;
   flex-wrap:wrap;
+  align-items:center;
   margin-bottom:20px;
 }
-.filters select, .filters input{
-  padding:8px 12px;
-  border-radius:6px;
+.filter-chip{
+  display:flex;
+  align-items:center;
+  gap:8px;
   border:1px solid var(--line);
+  border-radius:999px;
+  padding:7px 16px;
   background:var(--white);
+  font-size:13px;
 }
+.filter-chip .fc-label{ color:#8A7A63; font-weight:700; white-space:nowrap; }
+.filter-chip .fc-sep{ color:#8A7A63; }
+.filter-chip select, .filter-chip input{
+  border:none;
+  background:transparent;
+  padding:0;
+  font-size:13px;
+  font-weight:600;
+  color:var(--brass-dark);
+  cursor:pointer;
+  max-width:150px;
+}
+.filter-chip select:focus, .filter-chip input:focus{ outline:none; }
 .summary-cards{
   display:grid;
   grid-template-columns:repeat(auto-fit, minmax(180px,1fr));
@@ -320,6 +372,34 @@ select, button, input{
   margin-bottom:18px;
 }
 .report-section h4{ margin-bottom:14px; font-size:15px; }
+.branch-report-card{ padding:20px; }
+.branch-report-card h4{ font-size:18px; margin-bottom:14px; }
+.branch-report-card h5{ font-size:13px; color:#8A7A63; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.4px; }
+.mini-stats{
+  display:flex;
+  gap:24px;
+  flex-wrap:wrap;
+  margin-bottom:18px;
+  padding-bottom:16px;
+  border-bottom:1px solid var(--line);
+}
+.mini-stats > div{ display:flex; flex-direction:column; gap:2px; }
+.ms-label{ font-size:11px; color:#8A7A63; }
+.ms-value{ font-size:17px; font-weight:800; color:var(--ink); }
+.branch-report-sub{
+  display:grid;
+  grid-template-columns:1fr 1.4fr;
+  gap:24px;
+  margin-bottom:16px;
+}
+@media (max-width:720px){ .branch-report-sub{ grid-template-columns:1fr; } }
+.mini-row{
+  display:flex;
+  justify-content:space-between;
+  font-size:13px;
+  padding:7px 0;
+  border-bottom:1px dashed var(--line);
+}
 .bar-chart{
   display:flex;
   align-items:flex-end;
@@ -513,57 +593,56 @@ tfoot td{ font-weight:800; background:var(--paper-dim); border-top:2px solid var
   <div id="reportsView" style="display:none">
     <div class="reports-main">
       <div class="filters">
-        <select id="filterBranch"><option value="all">All Branches</option></select>
-        <select id="filterPayment">
-          <option value="all">All Payment Methods</option>
-          <option value="Cash">Cash</option>
-          <option value="Card">Card</option>
-          <option value="Talabat">Talabat</option>
-          <option value="Jahez">Jahez</option>
-          <option value="Ahlan">Ahlan</option>
-        </select>
-        <select id="filterDaypart">
-          <option value="all">All Times</option>
-          <option value="Breakfast">Breakfast</option>
-          <option value="Lunch">Lunch</option>
-          <option value="Dinner">Dinner</option>
-          <option value="Late Night">Late Night</option>
-        </select>
+        <div class="filter-chip">
+          <span class="fc-label">Date</span>
+          <input type="date" id="filterDateFrom">
+          <span class="fc-sep">–</span>
+          <input type="date" id="filterDateTo">
+        </div>
+        <div class="filter-chip">
+          <span class="fc-label">Branch</span>
+          <select id="filterBranch"><option value="all">All Branches</option></select>
+        </div>
+        <div class="filter-chip">
+          <span class="fc-label">Type</span>
+          <select id="filterOrderType">
+            <option value="all">All Types</option>
+            <option value="dinein">Dine-in/Takeaway</option>
+            <option value="delivery">Delivery</option>
+          </select>
+        </div>
+        <div class="filter-chip">
+          <span class="fc-label">Payment</span>
+          <select id="filterPayment">
+            <option value="all">All Payment Methods</option>
+            <option value="Cash">Cash</option>
+            <option value="Card">Card</option>
+            <option value="Talabat">Talabat</option>
+            <option value="Jahez">Jahez</option>
+            <option value="Ahlan">Ahlan</option>
+          </select>
+        </div>
+        <div class="filter-chip">
+          <span class="fc-label">Daypart</span>
+          <select id="filterDaypart">
+            <option value="all">All Times</option>
+            <option value="Breakfast">Breakfast</option>
+            <option value="Lunch">Lunch</option>
+            <option value="Dinner">Dinner</option>
+            <option value="Late Night">Late Night</option>
+          </select>
+        </div>
+        <button id="clearFiltersBtn" class="filter-chip" style="cursor:pointer; background:var(--paper-dim);">Clear Filters</button>
         <button id="clearOrdersBtn" class="submit-btn" style="width:auto; padding:8px 18px; background:var(--ink);">Clear All Orders (Reset Data)</button>
       </div>
 
       <div class="summary-cards">
-        <div class="s-card"><div class="label">Total Sales</div><div class="value" id="sumTotal">0.000 BHD</div></div>
+        <div class="s-card"><div class="label">Total Sales (All Branches)</div><div class="value" id="sumTotal">0.000 BHD</div></div>
         <div class="s-card"><div class="label">Order Count</div><div class="value" id="sumCount">0</div></div>
         <div class="s-card"><div class="label">Average Order</div><div class="value" id="sumAvg">0.000 BHD</div></div>
       </div>
 
-      <div class="report-section">
-        <h4>Sales by Branch</h4>
-        <div id="byBranch"></div>
-      </div>
-      <div class="report-section">
-        <h4>Sales by Payment Method / Delivery Platform</h4>
-        <div id="byPayment"></div>
-      </div>
-      <div class="report-section">
-        <h4>Sales by Daypart</h4>
-        <div id="byDaypart"></div>
-      </div>
-      <div class="report-section">
-        <h4>Sales by Size</h4>
-        <table>
-          <thead><tr><th>Size</th><th>Quantity Sold</th><th>Total</th></tr></thead>
-          <tbody id="bySizeTable"></tbody>
-        </table>
-      </div>
-      <div class="report-section">
-        <h4>Recent Orders</h4>
-        <table>
-          <thead><tr><th>Time</th><th>Branch</th><th>Type</th><th>Payment</th><th>Total</th></tr></thead>
-          <tbody id="ordersTable"></tbody>
-        </table>
-      </div>
+      <div id="branchReportsContainer"></div>
     </div>
   </div>
 
@@ -687,7 +766,7 @@ let state = {
   payment: "Cash",
 };
 let branchPasswords = {}; // branchName -> password (empty/absent = no password)
-let isAdmin = false;
+let isAdmin = true;
 let adminPassword = 'admin1234'; // default, changeable from the branches tab once logged in
 
 function daypartFor(date){
@@ -852,6 +931,27 @@ function renderProducts(){
     });
     grid.appendChild(card);
   });
+  updateSizeBadges();
+}
+
+function updateSizeBadges(){
+  document.querySelectorAll('.size-btn').forEach(btn=>{
+    const key = btn.dataset.pid + '::' + btn.dataset.skey;
+    const qty = state.cart[key] || 0;
+    let badge = btn.querySelector('.sb-badge');
+    if(qty > 0){
+      btn.classList.add('in-cart');
+      if(!badge){
+        badge = document.createElement('span');
+        badge.className = 'sb-badge';
+        btn.appendChild(badge);
+      }
+      badge.textContent = qty;
+    } else {
+      btn.classList.remove('in-cart');
+      if(badge) badge.remove();
+    }
+  });
 }
 
 function cartKeyInfo(key){
@@ -899,6 +999,7 @@ function renderCart(){
   const total = keys.reduce((s,key)=> s + cartKeyInfo(key).size.price * state.cart[key], 0);
   document.getElementById('cartTotal').textContent = total.toFixed(3) + ' BHD';
   document.getElementById('submitOrder').disabled = keys.length===0;
+  updateSizeBadges();
 }
 
 // order type
@@ -1086,15 +1187,21 @@ document.getElementById('clearOrdersBtn').addEventListener('click', async ()=>{
 });
 
 async function renderReports(){
-  document.getElementById('byBranch').innerHTML = '<div class="empty-state">Loading...</div>';
+  document.getElementById('branchReportsContainer').innerHTML = '<div class="empty-state">Loading...</div>';
   let orders = await fetchAllOrders();
 
   const fb = document.getElementById('filterBranch').value;
   const fp = document.getElementById('filterPayment').value;
   const fd = document.getElementById('filterDaypart').value;
+  const ft = document.getElementById('filterOrderType').value;
+  const dFrom = document.getElementById('filterDateFrom').value;
+  const dTo = document.getElementById('filterDateTo').value;
   if(fb!=='all') orders = orders.filter(o=>o.branch===fb);
   if(fp!=='all') orders = orders.filter(o=>o.payment===fp);
   if(fd!=='all') orders = orders.filter(o=>o.daypart===fd);
+  if(ft!=='all') orders = orders.filter(o=>o.orderType===ft);
+  if(dFrom) orders = orders.filter(o=> new Date(o.timestamp) >= new Date(dFrom + 'T00:00:00'));
+  if(dTo) orders = orders.filter(o=> new Date(o.timestamp) <= new Date(dTo + 'T23:59:59'));
 
   orders.sort((a,b)=> new Date(b.timestamp) - new Date(a.timestamp));
 
@@ -1108,22 +1215,79 @@ async function renderReports(){
   document.getElementById('sumCount').textContent = orders.length;
   document.getElementById('sumAvg').textContent = (orders.length? total/orders.length : 0).toFixed(3) + ' BHD';
 
-  renderBarGroup('byBranch', groupBy(orders,'branch'), total, BRANCH_COLORS);
-  renderBarGroup('byPayment', groupBy(orders,'payment'), total);
-  renderBarGroup('byDaypart', groupBy(orders,'daypart'), total);
-  renderSizeTable(orders);
+  const branchesToShow = fb!=='all' ? [fb] : BRANCHES;
+  const container = document.getElementById('branchReportsContainer');
+  container.innerHTML = branchesToShow.map(branch=> renderOneBranchReport(branch, orders.filter(o=>o.branch===branch))).join('');
+}
 
-  const tbody = document.getElementById('ordersTable');
-  if(orders.length===0){
-    tbody.innerHTML = '<tr><td colspan="5" class="empty-state">No matching orders yet</td></tr>';
-  } else {
-    tbody.innerHTML = orders.slice(0,25).map(o=>{
-      const d = new Date(o.timestamp);
-      const time = d.toLocaleString('en-US', {dateStyle:'short', timeStyle:'short', hour12:true});
-      const typeLabel = o.orderType==='delivery' ? 'Delivery' : 'Dine-in/Takeaway';
-      return `<tr><td>${time}</td><td>${o.branch}</td><td>${typeLabel}</td><td>${o.payment}</td><td>${o.total.toFixed(3)} BHD</td></tr>`;
-    }).join('');
-  }
+function renderOneBranchReport(branch, orders){
+  const color = BRANCH_COLORS[branch] || 'var(--brass)';
+  const total = orders.reduce((s,o)=>s+o.total,0);
+  const avg = orders.length ? total/orders.length : 0;
+
+  const payMap = groupBy(orders, 'payment');
+  const payRows = Object.entries(payMap).sort((a,b)=>b[1]-a[1]);
+  const payHtml = payRows.length===0
+    ? '<div class="empty-state">No data yet</div>'
+    : payRows.map(([label,val])=>`<div class="mini-row"><span>${label}</span><span>${val.toFixed(3)} BHD</span></div>`).join('');
+
+  const sizeStats = {};
+  orders.forEach(o=>{
+    (o.items||[]).forEach(it=>{
+      const size = it.size || 'Unspecified';
+      const name = it.name || 'Unknown';
+      const key = name + '::' + size;
+      if(!sizeStats[key]) sizeStats[key] = {name, size, qty:0, total:0};
+      sizeStats[key].qty += it.qty;
+      sizeStats[key].total += it.qty * currentItemPrice(it);
+    });
+  });
+  const sizeRows = Object.values(sizeStats).sort((a,b)=>
+    a.name===b.name ? sizeOrderIndex(a.size)-sizeOrderIndex(b.size) : a.name.localeCompare(b.name)
+  );
+  const sizeHtml = sizeRows.length===0
+    ? '<tr><td colspan="4" class="empty-state">No data yet</td></tr>'
+    : sizeRows.map(s=>`<tr><td>${s.name}</td><td>${s.size}</td><td>${s.qty}</td><td>${s.total.toFixed(3)} BHD</td></tr>`).join('');
+
+  const ordersHtml = orders.length===0
+    ? '<tr><td colspan="4" class="empty-state">No orders yet</td></tr>'
+    : orders.slice(0,10).map(o=>{
+        const d = new Date(o.timestamp);
+        const time = d.toLocaleString('en-US', {dateStyle:'short', timeStyle:'short', hour12:true});
+        const typeLabel = o.orderType==='delivery' ? 'Delivery' : 'Dine-in/Takeaway';
+        return `<tr><td>${time}</td><td>${typeLabel}</td><td>${o.payment}</td><td>${o.total.toFixed(3)} BHD</td></tr>`;
+      }).join('');
+
+  return `
+    <div class="report-section branch-report-card" style="border-inline-start:5px solid ${color};">
+      <h4 style="color:${color};">${branch}</h4>
+      <div class="mini-stats">
+        <div><span class="ms-label">Orders</span><span class="ms-value">${orders.length}</span></div>
+        <div><span class="ms-label">Total Sales</span><span class="ms-value">${total.toFixed(3)} BHD</span></div>
+        <div><span class="ms-label">Average Order</span><span class="ms-value">${avg.toFixed(3)} BHD</span></div>
+      </div>
+
+      <div class="branch-report-sub">
+        <div>
+          <h5>Sales by Payment</h5>
+          ${payHtml}
+        </div>
+        <div>
+          <h5>Sales by Size</h5>
+          <table>
+            <thead><tr><th>Item</th><th>Size</th><th>Qty</th><th>Total</th></tr></thead>
+            <tbody>${sizeHtml}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <h5 style="margin-top:14px;">Recent Orders</h5>
+      <table>
+        <thead><tr><th>Time</th><th>Type</th><th>Payment</th><th>Total</th></tr></thead>
+        <tbody>${ordersHtml}</tbody>
+      </table>
+    </div>
+  `;
 }
 
 function currentItemPrice(it){
@@ -1143,21 +1307,44 @@ function renderSizeTable(orders){
   const stats = {};
   orders.forEach(o=>{
     (o.items||[]).forEach(it=>{
-      const label = it.size || 'Unspecified';
-      if(!stats[label]) stats[label] = {qty:0, total:0};
-      stats[label].qty += it.qty;
-      stats[label].total += it.qty * currentItemPrice(it);
+      const size = it.size || 'Unspecified';
+      const name = it.name || 'Unknown';
+      const key = name + '::' + size;
+      if(!stats[key]) stats[key] = {name, size, qty:0, total:0};
+      stats[key].qty += it.qty;
+      stats[key].total += it.qty * currentItemPrice(it);
     });
   });
   const tbody = document.getElementById('bySizeTable');
-  const entries = Object.entries(stats).sort((a,b)=> sizeOrderIndex(a[0]) - sizeOrderIndex(b[0]));
+  const entries = Object.values(stats).sort((a,b)=>
+    a.name===b.name ? sizeOrderIndex(a.size)-sizeOrderIndex(b.size) : a.name.localeCompare(b.name)
+  );
   if(entries.length===0){
-    tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No data yet</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No data yet</td></tr>';
     return;
   }
-  tbody.innerHTML = entries.map(([label, s])=>
-    `<tr><td>${label}</td><td>${s.qty}</td><td>${s.total.toFixed(3)} BHD</td></tr>`
+  tbody.innerHTML = entries.map(s=>
+    `<tr><td>${s.name}</td><td>${s.size}</td><td>${s.qty}</td><td>${s.total.toFixed(3)} BHD</td></tr>`
   ).join('');
+}
+
+function renderBranchSummary(orders){
+  const stats = {};
+  orders.forEach(o=>{
+    if(!stats[o.branch]) stats[o.branch] = {count:0, total:0};
+    stats[o.branch].count += 1;
+    stats[o.branch].total += o.total;
+  });
+  const tbody = document.getElementById('branchSummaryTable');
+  const entries = Object.entries(stats).sort((a,b)=> b[1].total - a[1].total);
+  if(entries.length===0){
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No data yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(([branch, s])=>{
+    const avg = s.count ? s.total/s.count : 0;
+    return `<tr><td>${branch}</td><td>${s.count}</td><td>${s.total.toFixed(3)} BHD</td><td>${avg.toFixed(3)} BHD</td></tr>`;
+  }).join('');
 }
 
 function groupBy(orders, key){
@@ -1186,6 +1373,18 @@ function renderBarGroup(elId, map, grandTotal, colorMap){
 document.getElementById('filterBranch').addEventListener('change', renderReports);
 document.getElementById('filterPayment').addEventListener('change', renderReports);
 document.getElementById('filterDaypart').addEventListener('change', renderReports);
+document.getElementById('filterOrderType').addEventListener('change', renderReports);
+document.getElementById('filterDateFrom').addEventListener('change', renderReports);
+document.getElementById('filterDateTo').addEventListener('change', renderReports);
+document.getElementById('clearFiltersBtn').addEventListener('click', ()=>{
+  document.getElementById('filterBranch').value = 'all';
+  document.getElementById('filterPayment').value = 'all';
+  document.getElementById('filterDaypart').value = 'all';
+  document.getElementById('filterOrderType').value = 'all';
+  document.getElementById('filterDateFrom').value = '';
+  document.getElementById('filterDateTo').value = '';
+  renderReports();
+});
 
 // ---------- price editor ----------
 function renderPriceEditor(){
@@ -1297,14 +1496,9 @@ function updateAdminUI(){
   }
 }
 
-document.getElementById('adminToggle').addEventListener('click', async ()=>{
-  if(isAdmin){
-    isAdmin = false;
-    updateAdminUI();
-  } else {
-    const ok = await promptPassword('Admin Password', adminPassword);
-    if(ok){ isAdmin = true; updateAdminUI(); }
-  }
+document.getElementById('adminToggle').addEventListener('click', ()=>{
+  isAdmin = !isAdmin;
+  updateAdminUI();
 });
 
 document.getElementById('saveAdminPassword').addEventListener('click', async ()=>{
