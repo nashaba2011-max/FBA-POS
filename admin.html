@@ -633,6 +633,7 @@ tfoot td{ font-weight:800; background:var(--paper-dim); border-top:2px solid var
           </select>
         </div>
         <button id="clearFiltersBtn" class="filter-chip" style="cursor:pointer; background:var(--paper-dim);">Clear Filters</button>
+        <button id="exportExcelBtn" class="filter-chip" style="cursor:pointer; background:var(--green); color:#fff; border-color:var(--green);">⬇ Export to Excel</button>
         <button id="clearOrdersBtn" class="submit-btn" style="width:auto; padding:8px 18px; background:var(--ink);">Clear All Orders (Reset Data)</button>
       </div>
 
@@ -640,6 +641,14 @@ tfoot td{ font-weight:800; background:var(--paper-dim); border-top:2px solid var
         <div class="s-card"><div class="label">Total Sales (All Branches)</div><div class="value" id="sumTotal">0.000 BHD</div></div>
         <div class="s-card"><div class="label">Order Count</div><div class="value" id="sumCount">0</div></div>
         <div class="s-card"><div class="label">Average Order</div><div class="value" id="sumAvg">0.000 BHD</div></div>
+      </div>
+
+      <div class="report-section">
+        <h4>Sales by Size (All Branches)</h4>
+        <table>
+          <thead><tr><th>Size</th><th>Quantity Sold</th><th>Total</th></tr></thead>
+          <tbody id="globalSizeTable"></tbody>
+        </table>
       </div>
 
       <div id="branchReportsContainer"></div>
@@ -712,6 +721,7 @@ tfoot td{ font-weight:800; background:var(--paper-dim); border-top:2px solid var
     </div>
   </div>
 </div></div><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 const SUPABASE_URL = "https://lzadmbjhcxqvafykntsp.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6YWRtYmpoY3hxdmFmeWtudHNwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk0NjQwOTYsImV4cCI6MjEwNTA0MDA5Nn0.HNGwF8_lHrUHU_Xhx9Ymn0eoLHGaJ2GVd69umNNkXCI";
@@ -766,6 +776,7 @@ let state = {
   payment: "Cash",
 };
 let branchPasswords = {}; // branchName -> password (empty/absent = no password)
+let lastReportOrders = []; // filtered orders from the last Reports render, used for Excel export
 let isAdmin = true;
 let adminPassword = 'admin1234'; // default, changeable from the branches tab once logged in
 
@@ -1215,9 +1226,34 @@ async function renderReports(){
   document.getElementById('sumCount').textContent = orders.length;
   document.getElementById('sumAvg').textContent = (orders.length? total/orders.length : 0).toFixed(3) + ' BHD';
 
+  renderGlobalSizeTable(orders);
+
   const branchesToShow = fb!=='all' ? [fb] : BRANCHES;
   const container = document.getElementById('branchReportsContainer');
   container.innerHTML = branchesToShow.map(branch=> renderOneBranchReport(branch, orders.filter(o=>o.branch===branch))).join('');
+
+  lastReportOrders = orders;
+}
+
+function renderGlobalSizeTable(orders){
+  const stats = {};
+  orders.forEach(o=>{
+    (o.items||[]).forEach(it=>{
+      const label = it.size || 'Unspecified';
+      if(!stats[label]) stats[label] = {qty:0, total:0};
+      stats[label].qty += it.qty;
+      stats[label].total += it.qty * currentItemPrice(it);
+    });
+  });
+  const tbody = document.getElementById('globalSizeTable');
+  const entries = Object.entries(stats).sort((a,b)=> sizeOrderIndex(a[0]) - sizeOrderIndex(b[0]));
+  if(entries.length===0){
+    tbody.innerHTML = '<tr><td colspan="3" class="empty-state">No data yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = entries.map(([label, s])=>
+    `<tr><td>${label}</td><td>${s.qty}</td><td>${s.total.toFixed(3)} BHD</td></tr>`
+  ).join('');
 }
 
 function renderOneBranchReport(branch, orders){
@@ -1384,6 +1420,70 @@ document.getElementById('clearFiltersBtn').addEventListener('click', ()=>{
   document.getElementById('filterDateFrom').value = '';
   document.getElementById('filterDateTo').value = '';
   renderReports();
+});
+
+document.getElementById('exportExcelBtn').addEventListener('click', ()=>{
+  const orders = lastReportOrders;
+  if(!orders || orders.length===0){ showToast('No data to export'); return; }
+
+  const wb = XLSX.utils.book_new();
+
+  const ordersRows = orders.map(o=>({
+    'Time': new Date(o.timestamp).toLocaleString('en-US', {dateStyle:'short', timeStyle:'short', hour12:true}),
+    'Branch': o.branch,
+    'Type': o.orderType==='delivery' ? 'Delivery' : 'Dine-in/Takeaway',
+    'Payment': o.payment,
+    'Daypart': o.daypart,
+    'Total (BHD)': Number(o.total.toFixed(3))
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ordersRows), 'Orders');
+
+  const itemRows = [];
+  orders.forEach(o=>{
+    (o.items||[]).forEach(it=>{
+      itemRows.push({
+        'Time': new Date(o.timestamp).toLocaleString('en-US', {dateStyle:'short', timeStyle:'short', hour12:true}),
+        'Branch': o.branch,
+        'Item': it.name,
+        'Size': it.size,
+        'Qty': it.qty,
+        'Unit Price (BHD)': Number(currentItemPrice(it).toFixed(3)),
+        'Line Total (BHD)': Number((currentItemPrice(it)*it.qty).toFixed(3))
+      });
+    });
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(itemRows), 'Order Items');
+
+  const sizeStats = {};
+  orders.forEach(o=> (o.items||[]).forEach(it=>{
+    const label = it.size || 'Unspecified';
+    if(!sizeStats[label]) sizeStats[label] = {qty:0, total:0};
+    sizeStats[label].qty += it.qty;
+    sizeStats[label].total += it.qty * currentItemPrice(it);
+  }));
+  const sizeRows = Object.entries(sizeStats)
+    .sort((a,b)=> sizeOrderIndex(a[0]) - sizeOrderIndex(b[0]))
+    .map(([size, s])=>({ 'Size': size, 'Quantity Sold': s.qty, 'Total (BHD)': Number(s.total.toFixed(3)) }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sizeRows), 'Sales by Size');
+
+  const branchStats = {};
+  orders.forEach(o=>{
+    if(!branchStats[o.branch]) branchStats[o.branch] = {count:0, total:0};
+    branchStats[o.branch].count += 1;
+    branchStats[o.branch].total += o.total;
+  });
+  const branchRows = Object.entries(branchStats)
+    .sort((a,b)=> b[1].total - a[1].total)
+    .map(([branch, s])=>({
+      'Branch': branch,
+      'Orders': s.count,
+      'Total Sales (BHD)': Number(s.total.toFixed(3)),
+      'Average Order (BHD)': Number((s.count? s.total/s.count : 0).toFixed(3))
+    }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(branchRows), 'Branch Summary');
+
+  const dateStr = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `Fareeq-Bin-Aqool-Report-${dateStr}.xlsx`);
 });
 
 // ---------- price editor ----------
