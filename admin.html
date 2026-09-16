@@ -663,7 +663,7 @@ tfoot td{ font-weight:800; background:var(--paper-dim); border-top:2px solid var
       <div class="report-section">
         <h4>Edit Base Prices</h4>
         <p style="font-size:13px; color:#8A7A63; margin-bottom:16px;">
-          Edit each size's price for every item individually, then click Save.
+          Each size has 5 fields, top to bottom: <strong style="color:var(--ink);">Dine-in/Takeaway price</strong>, <strong style="color:var(--brick);">Cost</strong>, <strong style="color:#F97300;">Talabat price</strong>, <strong style="color:#D6249F;">Jahez price</strong>, <strong style="color:#00A651;">Ahlan price</strong>. Edit and click Save.
         </p>
         <div id="priceEditor"></div>
         <button class="submit-btn" id="savePrices" style="margin-top:16px; width:auto; padding:12px 32px;">Save Prices</button>
@@ -757,16 +757,33 @@ let PRODUCTS = [];
 let CATEGORIES = [];
 
 async function loadProducts(){
-  const { data, error } = await db.from('products').select('id, name, category, base_price, product_sizes(id, size_key, size_label, price, cost)');
+  const { data, error } = await db.from('products').select('id, name, category, base_price, product_sizes(id, size_key, size_label, price, cost, price_talabat, price_jahez, price_ahlan)');
   if(error){ console.error(error); return; }
   PRODUCTS = data.map(p=>({
     id: p.id,
     cat: p.category,
     name: p.name,
     price: p.base_price,
-    sizes: p.product_sizes.map(s=>({ id:s.id, key:s.size_key, label:s.size_label, price:s.price, cost:s.cost||0 }))
+    sizes: p.product_sizes.map(s=>({
+      id:s.id, key:s.size_key, label:s.size_label,
+      price:s.price, cost:s.cost||0,
+      priceTalabat: s.price_talabat!=null ? s.price_talabat : s.price,
+      priceJahez: s.price_jahez!=null ? s.price_jahez : s.price,
+      priceAhlan: s.price_ahlan!=null ? s.price_ahlan : s.price
+    }))
   }));
   CATEGORIES = [...new Set(PRODUCTS.map(p=>p.cat))];
+}
+
+function getSizePriceForChannel(size, payment){
+  if(payment==='Talabat') return size.priceTalabat;
+  if(payment==='Jahez') return size.priceJahez;
+  if(payment==='Ahlan') return size.priceAhlan;
+  return size.price; // dine-in / takeaway
+}
+
+function getCurrentChannel(){
+  return state.orderType==='delivery' ? state.platform : null;
 }
 
 let state = {
@@ -925,13 +942,14 @@ function renderCategories(){
 function renderProducts(){
   const grid = document.getElementById('productGrid');
   grid.innerHTML = '';
+  const channel = getCurrentChannel();
   PRODUCTS.filter(p=>p.cat===state.activeCat).forEach(p=>{
     const card = document.createElement('div');
     card.className = 'product-card';
     const sizesHtml = p.sizes.map(s=>
       `<div class="size-btn" data-pid="${p.id}" data-skey="${s.key}">
         <span class="sb-label">${s.label}</span>
-        <span class="sb-price">${s.price.toFixed(3)}</span>
+        <span class="sb-price">${getSizePriceForChannel(s, channel).toFixed(3)}</span>
       </div>`
     ).join('');
     card.innerHTML = `<div class="name">${p.name}</div><div class="size-grid">${sizesHtml}</div>`;
@@ -977,12 +995,14 @@ function cartKeyInfo(key){
 function renderCart(){
   const wrap = document.getElementById('cartItems');
   const keys = Object.keys(state.cart).filter(k=>state.cart[k]>0);
+  const channel = getCurrentChannel();
   if(keys.length===0){
     wrap.innerHTML = '<div class="cart-empty">No items yet</div>';
   } else {
     wrap.innerHTML = '';
     keys.forEach(key=>{
       const {product, size} = cartKeyInfo(key);
+      const price = getSizePriceForChannel(size, channel);
       const qty = state.cart[key];
       const row = document.createElement('div');
       row.className = 'cart-item';
@@ -996,7 +1016,7 @@ function renderCart(){
           <span>${qty}</span>
           <button data-act="inc" data-key="${key}">+</button>
         </div>
-        <div class="ci-price">${(size.price*qty).toFixed(3)}</div>
+        <div class="ci-price">${(price*qty).toFixed(3)}</div>
       `;
       wrap.appendChild(row);
     });
@@ -1009,7 +1029,10 @@ function renderCart(){
       });
     });
   }
-  const total = keys.reduce((s,key)=> s + cartKeyInfo(key).size.price * state.cart[key], 0);
+  const total = keys.reduce((s,key)=>{
+    const {size} = cartKeyInfo(key);
+    return s + getSizePriceForChannel(size, channel) * state.cart[key];
+  }, 0);
   document.getElementById('cartTotal').textContent = total.toFixed(3) + ' BHD';
   document.getElementById('submitOrder').disabled = keys.length===0;
   updateSizeBadges();
@@ -1031,6 +1054,8 @@ document.getElementById('orderType').querySelectorAll('button').forEach(btn=>{
       platformRow.style.display='none';
       paymentRow.style.display='flex';
     }
+    renderProducts();
+    renderCart();
   });
 });
 document.getElementById('platformRow').querySelectorAll('button').forEach(btn=>{
@@ -1038,6 +1063,8 @@ document.getElementById('platformRow').querySelectorAll('button').forEach(btn=>{
     document.getElementById('platformRow').querySelectorAll('button').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     state.platform = btn.dataset.platform;
+    renderProducts();
+    renderCart();
   });
 });
 document.getElementById('paymentRow').querySelectorAll('button').forEach(btn=>{
@@ -1052,9 +1079,10 @@ document.getElementById('paymentRow').querySelectorAll('button').forEach(btn=>{
 document.getElementById('submitOrder').addEventListener('click', async ()=>{
   const keys = Object.keys(state.cart).filter(k=>state.cart[k]>0);
   if(keys.length===0) return;
+  const channel = getCurrentChannel();
   const items = keys.map(key=>{
     const {product, size} = cartKeyInfo(key);
-    return {id:product.id, name:product.name, size:size.label, price:size.price, qty:state.cart[key]};
+    return {id:product.id, name:product.name, size:size.label, price:getSizePriceForChannel(size, channel), qty:state.cart[key]};
   });
   const total = items.reduce((s,it)=> s + it.price*it.qty, 0);
   const now = new Date();
@@ -1133,7 +1161,7 @@ async function renderBranchOrders(){
 
   // always show current prices, even for older orders
   orders.forEach(o=>{
-    (o.items||[]).forEach(it=>{ it.price = currentItemPrice(it); it.cost = currentItemCost(it); });
+    (o.items||[]).forEach(it=>{ it.price = currentItemPrice(it, o); it.cost = currentItemCost(it); });
     o.total = (o.items||[]).reduce((s,it)=> s + it.price*it.qty, 0);
   });
 
@@ -1222,7 +1250,7 @@ async function renderReports(){
 
   // always show the report at current prices, even for old orders
   orders.forEach(o=>{
-    o.total = (o.items||[]).reduce((s,it)=> s + currentItemPrice(it)*it.qty, 0);
+    o.total = (o.items||[]).reduce((s,it)=> s + currentItemPrice(it, o)*it.qty, 0);
     o.cost = (o.items||[]).reduce((s,it)=> s + currentItemCost(it)*it.qty, 0);
   });
 
@@ -1250,7 +1278,7 @@ function renderGlobalSizeTable(orders){
       const label = it.size || 'Unspecified';
       if(!stats[label]) stats[label] = {qty:0, total:0, cost:0};
       stats[label].qty += it.qty;
-      stats[label].total += it.qty * currentItemPrice(it);
+      stats[label].total += it.qty * currentItemPrice(it, o);
       stats[label].cost += it.qty * currentItemCost(it);
     });
   });
@@ -1285,7 +1313,7 @@ function renderOneBranchReport(branch, orders){
       const key = name + '::' + size;
       if(!sizeStats[key]) sizeStats[key] = {name, size, qty:0, total:0, cost:0};
       sizeStats[key].qty += it.qty;
-      sizeStats[key].total += it.qty * currentItemPrice(it);
+      sizeStats[key].total += it.qty * currentItemPrice(it, o);
       sizeStats[key].cost += it.qty * currentItemCost(it);
     });
   });
@@ -1339,11 +1367,13 @@ function renderOneBranchReport(branch, orders){
   `;
 }
 
-function currentItemPrice(it){
+function currentItemPrice(it, order){
   const product = PRODUCTS.find(p=>p.id===it.id);
   if(!product) return it.price; // item removed from the menu, fall back to the last recorded price
   const size = product.sizes.find(s=>s.label===it.size);
-  return size ? size.price : it.price;
+  if(!size) return it.price;
+  const payment = order ? order.payment : null;
+  return getSizePriceForChannel(size, payment);
 }
 
 function currentItemCost(it){
@@ -1368,7 +1398,7 @@ function renderSizeTable(orders){
       const key = name + '::' + size;
       if(!stats[key]) stats[key] = {name, size, qty:0, total:0};
       stats[key].qty += it.qty;
-      stats[key].total += it.qty * currentItemPrice(it);
+      stats[key].total += it.qty * currentItemPrice(it, o);
     });
   });
   const tbody = document.getElementById('bySizeTable');
@@ -1469,8 +1499,8 @@ document.getElementById('exportExcelBtn').addEventListener('click', ()=>{
         'Item': it.name,
         'Size': it.size,
         'Qty': it.qty,
-        'Unit Price (BHD)': Number(currentItemPrice(it).toFixed(3)),
-        'Line Total (BHD)': Number((currentItemPrice(it)*it.qty).toFixed(3))
+        'Unit Price (BHD)': Number(currentItemPrice(it, o).toFixed(3)),
+        'Line Total (BHD)': Number((currentItemPrice(it, o)*it.qty).toFixed(3))
       });
     });
   });
@@ -1481,7 +1511,7 @@ document.getElementById('exportExcelBtn').addEventListener('click', ()=>{
     const label = it.size || 'Unspecified';
     if(!sizeStats[label]) sizeStats[label] = {qty:0, total:0};
     sizeStats[label].qty += it.qty;
-    sizeStats[label].total += it.qty * currentItemPrice(it);
+    sizeStats[label].total += it.qty * currentItemPrice(it, o);
   }));
   const sizeRows = Object.entries(sizeStats)
     .sort((a,b)=> sizeOrderIndex(a[0]) - sizeOrderIndex(b[0]))
@@ -1494,7 +1524,7 @@ document.getElementById('exportExcelBtn').addEventListener('click', ()=>{
       const key = o.branch + '::' + it.name + '::' + it.size;
       if(!detailStats[key]) detailStats[key] = {branch:o.branch, item:it.name, size:it.size, qty:0, total:0};
       detailStats[key].qty += it.qty;
-      detailStats[key].total += it.qty * currentItemPrice(it);
+      detailStats[key].total += it.qty * currentItemPrice(it, o);
     });
   });
   const detailRows = Object.values(detailStats)
@@ -1543,8 +1573,11 @@ function renderPriceEditor(){
         ${p.sizes.map(s=>`
           <span class="pr-size-field">
             <span class="pr-unit">${s.label}</span>
-            <input type="number" step="0.001" min="0" data-sizeid="${s.id}" data-field="price" value="${s.price.toFixed(3)}" title="Selling price">
+            <input type="number" step="0.001" min="0" data-sizeid="${s.id}" data-field="price" value="${s.price.toFixed(3)}" title="Dine-in/Takeaway price">
             <input type="number" step="0.001" min="0" data-sizeid="${s.id}" data-field="cost" value="${(s.cost||0).toFixed(3)}" title="Cost" style="margin-top:4px; border-color:var(--brick);">
+            <input type="number" step="0.001" min="0" data-sizeid="${s.id}" data-field="priceTalabat" value="${s.priceTalabat.toFixed(3)}" title="Talabat price" style="margin-top:4px; border-color:#F97300;">
+            <input type="number" step="0.001" min="0" data-sizeid="${s.id}" data-field="priceJahez" value="${s.priceJahez.toFixed(3)}" title="Jahez price" style="margin-top:4px; border-color:#D6249F;">
+            <input type="number" step="0.001" min="0" data-sizeid="${s.id}" data-field="priceAhlan" value="${s.priceAhlan.toFixed(3)}" title="Ahlan price" style="margin-top:4px; border-color:#00A651;">
           </span>
         `).join('')}
       </div>
@@ -1553,25 +1586,19 @@ function renderPriceEditor(){
 }
 
 document.getElementById('savePrices').addEventListener('click', async ()=>{
-  const priceInputs = document.querySelectorAll('#priceEditor input[data-field="price"]');
-  const costInputs = document.querySelectorAll('#priceEditor input[data-field="cost"]');
+  const fieldMap = { price:'price', cost:'cost', priceTalabat:'price_talabat', priceJahez:'price_jahez', priceAhlan:'price_ahlan' };
+  const allInputs = document.querySelectorAll('#priceEditor input[data-field]');
   const btn = document.getElementById('savePrices');
   btn.disabled = true;
   btn.textContent = 'Saving...';
   try{
     const byId = {};
-    priceInputs.forEach(inp=>{
+    allInputs.forEach(inp=>{
       const val = parseFloat(inp.value);
-      if(!isNaN(val) && val>=0){
+      const dbField = fieldMap[inp.dataset.field];
+      if(!isNaN(val) && val>=0 && dbField){
         byId[inp.dataset.sizeid] = byId[inp.dataset.sizeid] || {};
-        byId[inp.dataset.sizeid].price = val;
-      }
-    });
-    costInputs.forEach(inp=>{
-      const val = parseFloat(inp.value);
-      if(!isNaN(val) && val>=0){
-        byId[inp.dataset.sizeid] = byId[inp.dataset.sizeid] || {};
-        byId[inp.dataset.sizeid].cost = val;
+        byId[inp.dataset.sizeid][dbField] = val;
       }
     });
     const updates = Object.entries(byId).map(([sizeId, fields])=>
