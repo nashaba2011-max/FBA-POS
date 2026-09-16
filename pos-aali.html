@@ -640,6 +640,8 @@ tfoot td{ font-weight:800; background:var(--paper-dim); border-top:2px solid var
         <div class="s-card"><div class="label">Total Sales (All Branches)</div><div class="value" id="sumTotal">0.000 BHD</div></div>
         <div class="s-card"><div class="label">Order Count</div><div class="value" id="sumCount">0</div></div>
         <div class="s-card"><div class="label">Average Order</div><div class="value" id="sumAvg">0.000 BHD</div></div>
+        <div class="s-card"><div class="label">Total Cost</div><div class="value" id="sumCost">0.000 BHD</div></div>
+        <div class="s-card" style="border-inline-start-color:var(--green);"><div class="label">Profit</div><div class="value" id="sumProfit">0.000 BHD</div></div>
       </div>
 
       <div class="report-section">
@@ -739,14 +741,14 @@ let PRODUCTS = [];
 let CATEGORIES = [];
 
 async function loadProducts(){
-  const { data, error } = await db.from('products').select('id, name, category, base_price, product_sizes(id, size_key, size_label, price)');
+  const { data, error } = await db.from('products').select('id, name, category, base_price, product_sizes(id, size_key, size_label, price, cost)');
   if(error){ console.error(error); return; }
   PRODUCTS = data.map(p=>({
     id: p.id,
     cat: p.category,
     name: p.name,
     price: p.base_price,
-    sizes: p.product_sizes.map(s=>({ id:s.id, key:s.size_key, label:s.size_label, price:s.price }))
+    sizes: p.product_sizes.map(s=>({ id:s.id, key:s.size_key, label:s.size_label, price:s.price, cost:s.cost||0 }))
   }));
   CATEGORIES = [...new Set(PRODUCTS.map(p=>p.cat))];
 }
@@ -1204,12 +1206,16 @@ async function renderReports(){
   // always show the report at current prices, even for old orders
   orders.forEach(o=>{
     o.total = (o.items||[]).reduce((s,it)=> s + currentItemPrice(it)*it.qty, 0);
+    o.cost = (o.items||[]).reduce((s,it)=> s + currentItemCost(it)*it.qty, 0);
   });
 
   const total = orders.reduce((s,o)=>s+o.total,0);
+  const totalCost = orders.reduce((s,o)=>s+o.cost,0);
   document.getElementById('sumTotal').textContent = total.toFixed(3) + ' BHD';
   document.getElementById('sumCount').textContent = orders.length;
   document.getElementById('sumAvg').textContent = (orders.length? total/orders.length : 0).toFixed(3) + ' BHD';
+  document.getElementById('sumCost').textContent = totalCost.toFixed(3) + ' BHD';
+  document.getElementById('sumProfit').textContent = (total-totalCost).toFixed(3) + ' BHD';
 
   renderGlobalSizeTable(orders);
 
@@ -1244,6 +1250,7 @@ function renderGlobalSizeTable(orders){
 function renderOneBranchReport(branch, orders){
   const color = BRANCH_COLORS[branch] || 'var(--brass)';
   const total = orders.reduce((s,o)=>s+o.total,0);
+  const cost = orders.reduce((s,o)=>s+o.cost,0);
   const avg = orders.length ? total/orders.length : 0;
 
   // payment breakdown
@@ -1289,6 +1296,8 @@ function renderOneBranchReport(branch, orders){
         <div><span class="ms-label">Orders</span><span class="ms-value">${orders.length}</span></div>
         <div><span class="ms-label">Total Sales</span><span class="ms-value">${total.toFixed(3)} BHD</span></div>
         <div><span class="ms-label">Average Order</span><span class="ms-value">${avg.toFixed(3)} BHD</span></div>
+        <div><span class="ms-label">Cost</span><span class="ms-value">${cost.toFixed(3)} BHD</span></div>
+        <div><span class="ms-label">Profit</span><span class="ms-value" style="color:var(--green);">${(total-cost).toFixed(3)} BHD</span></div>
       </div>
 
       <div class="branch-report-sub">
@@ -1319,6 +1328,13 @@ function currentItemPrice(it){
   if(!product) return it.price; // item removed from the menu, fall back to the last recorded price
   const size = product.sizes.find(s=>s.label===it.size);
   return size ? size.price : it.price;
+}
+
+function currentItemCost(it){
+  const product = PRODUCTS.find(p=>p.id===it.id);
+  if(!product) return 0;
+  const size = product.sizes.find(s=>s.label===it.size);
+  return size ? (size.cost||0) : 0;
 }
 
 function sizeOrderIndex(label){
@@ -1423,7 +1439,9 @@ document.getElementById('exportExcelBtn').addEventListener('click', ()=>{
     'Type': o.orderType==='delivery' ? 'Delivery' : 'Dine-in/Takeaway',
     'Payment': o.payment,
     'Daypart': o.daypart,
-    'Total (BHD)': Number(o.total.toFixed(3))
+    'Total (BHD)': Number(o.total.toFixed(3)),
+    'Cost (BHD)': Number(o.cost.toFixed(3)),
+    'Profit (BHD)': Number((o.total-o.cost).toFixed(3))
   }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ordersRows), 'Orders');
 
@@ -1483,9 +1501,10 @@ document.getElementById('exportExcelBtn').addEventListener('click', ()=>{
   // Sheet 4: Branch Summary
   const branchStats = {};
   orders.forEach(o=>{
-    if(!branchStats[o.branch]) branchStats[o.branch] = {count:0, total:0};
+    if(!branchStats[o.branch]) branchStats[o.branch] = {count:0, total:0, cost:0};
     branchStats[o.branch].count += 1;
     branchStats[o.branch].total += o.total;
+    branchStats[o.branch].cost += o.cost;
   });
   const branchRows = Object.entries(branchStats)
     .sort((a,b)=> b[1].total - a[1].total)
@@ -1493,7 +1512,9 @@ document.getElementById('exportExcelBtn').addEventListener('click', ()=>{
       'Branch': branch,
       'Orders': s.count,
       'Total Sales (BHD)': Number(s.total.toFixed(3)),
-      'Average Order (BHD)': Number((s.count? s.total/s.count : 0).toFixed(3))
+      'Average Order (BHD)': Number((s.count? s.total/s.count : 0).toFixed(3)),
+      'Total Cost (BHD)': Number(s.cost.toFixed(3)),
+      'Profit (BHD)': Number((s.total-s.cost).toFixed(3))
     }));
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(branchRows), 'Branch Summary');
 
@@ -1511,7 +1532,8 @@ function renderPriceEditor(){
         ${p.sizes.map(s=>`
           <span class="pr-size-field">
             <span class="pr-unit">${s.label}</span>
-            <input type="number" step="0.001" min="0" data-sizeid="${s.id}" value="${s.price.toFixed(3)}">
+            <input type="number" step="0.001" min="0" data-sizeid="${s.id}" data-field="price" value="${s.price.toFixed(3)}" title="Selling price">
+            <input type="number" step="0.001" min="0" data-sizeid="${s.id}" data-field="cost" value="${(s.cost||0).toFixed(3)}" title="Cost" style="margin-top:4px; border-color:var(--brick);">
           </span>
         `).join('')}
       </div>
@@ -1520,16 +1542,30 @@ function renderPriceEditor(){
 }
 
 document.getElementById('savePrices').addEventListener('click', async ()=>{
-  const inputs = document.querySelectorAll('#priceEditor input');
+  const priceInputs = document.querySelectorAll('#priceEditor input[data-field="price"]');
+  const costInputs = document.querySelectorAll('#priceEditor input[data-field="cost"]');
   const btn = document.getElementById('savePrices');
   btn.disabled = true;
   btn.textContent = 'Saving...';
   try{
-    const updates = Array.from(inputs).map(inp=>{
+    const byId = {};
+    priceInputs.forEach(inp=>{
       const val = parseFloat(inp.value);
-      if(isNaN(val) || val<0) return null;
-      return db.from('product_sizes').update({ price: val }).eq('id', inp.dataset.sizeid);
-    }).filter(Boolean);
+      if(!isNaN(val) && val>=0){
+        byId[inp.dataset.sizeid] = byId[inp.dataset.sizeid] || {};
+        byId[inp.dataset.sizeid].price = val;
+      }
+    });
+    costInputs.forEach(inp=>{
+      const val = parseFloat(inp.value);
+      if(!isNaN(val) && val>=0){
+        byId[inp.dataset.sizeid] = byId[inp.dataset.sizeid] || {};
+        byId[inp.dataset.sizeid].cost = val;
+      }
+    });
+    const updates = Object.entries(byId).map(([sizeId, fields])=>
+      db.from('product_sizes').update(fields).eq('id', sizeId)
+    );
     const results = await Promise.all(updates);
     const failed = results.find(r=>r.error);
     if(failed) throw failed.error;
